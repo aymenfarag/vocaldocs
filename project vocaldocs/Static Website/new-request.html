@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VocalDocs- New Request</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1386.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/oidc-client-ts@2.2.1/dist/browser/oidc-client-ts.min.js"></script>
+</head>
+<body>
+    <div class="background"></div>
+    <script type="module">
+        import { userManager } from './main.js';
+
+        document.addEventListener('DOMContentLoaded', async function() {
+            const user = await userManager.getUser();
+            if (!user) {
+                // User is not logged in, redirect to the main page
+                window.location.href = 'index.html';
+            }
+        });
+    </script>
+
+    <div class="background"></div>
+    <div class="container animate__animated animate__fadeIn">
+        <header>
+            <img src="VocalDocs.png" alt="Logo" class="logo">
+        </header>
+        <h1 class="animate__animated animate__fadeInDown">New Request</h1>
+        <form id="newRequestForm" class="animate__animated animate__fadeInUp">
+            <div class="form-group">
+                <label for="fileUpload">Upload PDF File (Max 5MB):</label>
+                <input type="file" id="fileUpload" accept=".pdf" required>
+                <p class="error-message" id="fileError"></p>
+            </div>
+            <div class="form-group">
+                <label>Select Document Language:</label>
+                <div class="radio-group">
+                    <input type="radio" id="english" name="language" value="english" required>
+                    <label for="english">English</label>
+                    <input type="radio" id="arabic" name="language" value="arabic" required>
+                    <label for="arabic">Arabic</label>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="startPage">Start Page:</label>
+                <input type="number" id="startPage" min="1" required>
+            </div>
+            <div class="form-group">
+                <label for="endPage">End Page:</label>
+                <input type="number" id="endPage" min="1" required>
+            </div>
+            <button type="submit" class="button">Submit</button>
+        </form>
+        <div id="responseMessage"></div>
+        <a href="index.html" class="button back-button animate__animated animate__fadeIn">Back to Home</a>
+    </div>
+    <script src="main.js" type="module"></script>
+    <script src="script.js" type="module"></script>
+</body>
+</html>

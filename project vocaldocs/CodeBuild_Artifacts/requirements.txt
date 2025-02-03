@@ -1,0 +1,3 @@
+pdf2image==1.17.0
+Pillow
+boto3

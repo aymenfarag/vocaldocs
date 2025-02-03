@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VocalDocs- Track Existing Requests</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1386.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/oidc-client-ts@2.2.1/dist/browser/oidc-client-ts.min.js"></script>
+</head>
+<body>
+    <div class="background"></div>
+    <script type="module">
+        import { userManager } from './main.js';
+        import { fetchUserRequests } from './script.js';
+        import { generateDownloadLink } from './script.js';
+
+        document.addEventListener('DOMContentLoaded', async function() {
+            const user = await userManager.getUser();
+            if (!user) {
+                // User is not logged in, redirect to the main page
+                window.location.href = 'index.html';
+            } else {
+                // User is logged in, fetch their requests
+                fetchUserRequests(user);
+            }
+        });
+    </script>
+    
+    <div class="background"></div>
+    <div class="container animate__animated animate__fadeIn">
+        <header>
+            <img src="VocalDocs.png" alt="Logo" class="logo">
+        </header>
+        <h1 class="animate__animated animate__fadeInDown">Your Existing Requests</h1>
+        <button id="refreshButton" class="button animate__animated animate__fadeIn">Refresh Requests</button>
+        <div id="requestsTable" class="animate__animated animate__fadeInUp">
+            <table>
+                <thead>
+                    <tr>
+                        <th>File Name</th>
+                        <th>Reference Key</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="requestsTableBody">
+                    <!-- Requests will be populated here -->
+                </tbody>
+            </table>
+        </div>
+        <a href="index.html" class="button back-button animate__animated animate__fadeIn">Back to Home</a>
+    </div>
+    <script src="main.js" type="module"></script>
+    <script src="script.js" type="module"></script>
+    <script type="module">
+        import { generateDownloadLink } from './script.js';
+        window.generateDownloadLink = generateDownloadLink;
+    </script>
+    <script type="module">
+        import { userManager } from './main.js';
+        import { fetchUserRequests } from './script.js';
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const refreshButton = document.getElementById('refreshButton');
+            refreshButton.addEventListener('click', async function() {
+                const user = await userManager.getUser();
+                if (user) {
+                    fetchUserRequests(user);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VocalDocs-Text to Speech Converter</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1386.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/oidc-client-ts@2.2.1/dist/browser/oidc-client-ts.min.js"></script>
+</head>
+<body>
+    <div class="background"></div>
+    <div class="container">
+        <header>
+            <img src="VocalDocs.png" alt="Logo" class="logo animate__animated animate__fadeIn">
+        </header>
+        <p class="version">VocalDocs v1.0.0</p>
+        <h1 class="animate__animated animate__fadeInDown">Welcome to VocalDocs</h1>
+        <div id="loginSection" class="animate__animated animate__fadeIn">
+            <button id="signIn" class="button">Sign In</button>
+        </div>
+        <div id="mainContent" style="display: none;">
+            <div class="button-container">
+                <a href="new-request.html" class="button animate__animated animate__fadeInLeft">New Request</a>
+                <a href="track-request.html" class="button animate__animated animate__fadeInRight">Track Request</a>
+                <a href="comingsoon.html" class="button animate__animated animate__fadeInRight">Coming Soon</a>
+            </div>
+            <button id="signOut" class="button animate__animated animate__fadeIn">Log out</button>
+            <div id="userInfo">
+                <p>Hello: <span id="email"></span></p>
+            </div>
+        </div>
+    </div>
+    <script src="main.js" type="module"></script>
+    <script src="script.js" type="module"></script>
+</body>
+</html>
