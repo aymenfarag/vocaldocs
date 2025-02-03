@@ -7,8 +7,11 @@ VocalDocs is a solution that converts PDF documents into audio files using Serve
 
 ## Repository HL Structure
 **CodeBuild Artifacts**: Contains the necessary files to build the Docker image for the PDFSplitter Lambda function
+
 **Lambda Functions**: Contains the deployment packages for all Lambda functions used in the solution
+
 **Static Website**: Contains the frontend files for the user interface
+
 **Terraform Project**: Contains all IaC files to deploy the required AWS resources
 
 ## Repository Detailed Structure
@@ -138,11 +141,8 @@ terraform apply
 
 **Feel free to submit issues and enhancement requests!**
 
-License
-
-[Specify your license here]
-
 Contact [aymanahmad@gmail.com]
+License [Specify your license here]
 
 ## Detailed Deployment Instructions
 
