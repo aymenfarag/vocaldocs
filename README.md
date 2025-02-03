@@ -80,48 +80,69 @@ terraform apply
 
 ### Lambda Functions
 1. **upload-execution**
+
     Frontend
+
     Part of New Request Function static website flow
+
     Invocation: From static website Javascript with Cognito
-    Goal:
+
+    Goal: This lambda function will upload the pdf document to S3 bucket under prefix upload/ then will save the metadata to a Dynamo_db table
+
     Deployment: As part of Terraform deployment, you deploy the lambda .zip file
 2. **track-execution**
+
     Frontend
+
     Part of Track Existing Request Function static website flow
+
     Invocation: From static website Javascript with Cognito
-    Goal:
+
+    Goal: This lambda function will check the Dynamo_db table and retrieve all the ready voice for all uploaded documents by that user and it will create a pre-signed url for the user
+
     Deployment: As part of Terraform deployment, you deploy the lambda .zip file
 3. **PDFSplitter-CONTAINER**
+
     Backend 
+
     Part of New Request Function static website flow 
+
     Invocation: From Dynamo DB Stream "If New Raw Added" 
+
     Goal: PDF to Image conversion 
+
     Deployment: As part of Terraform deployment, you deploy CodeBuild artifact to build the image that will be used to run this lambda function
 4. **ImageConverter**
+
     Backend 
+
     Part of New Request Function static website flow 
+
     Invocation: From SNS Integration with Topic:Images-Text-BedrockInvoker
+
     Goal: Initiate API call with LLM model to convert each image to a clear text 
+
     Deployment: As part of Terraform deployment, you deploy the lambda .zip file
 5. **PollyInvoker**
+
     Backend 
+
     Part of New Request Function static website flow 
+
     Invocation: From S3 event notification if there is new .txt file is uploaded to S3 bucket under prefix download/
+
     Goal: Initiate API call with Polly to read the final text file into the selected language
+
     Deployment: As part of Terraform deployment, you deploy the lambda .zip file
 
 
-Feel free to submit issues and enhancement requests!
+**Feel free to submit issues and enhancement requests!**
 
 License
 
 [Specify your license here]
 
-Contact
-
-[aymanahmad@gmail.com]
-
-
+Contact [aymanahmad@gmail.com]
 
 ## Detailed Deployment Instructions
 
