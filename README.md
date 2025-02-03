@@ -38,7 +38,7 @@ Before deploying this solution, ensure you have:
 
 1. AWS CLI installed and configured with appropriate credentials
 2. Terraform installed (version 0.12 or later)
-3. Amazon Bedrock LLM enabled in your target AWS region
+3. Amazon Bedrock LLM (Claud 3.5) enabled in your target AWS region
 4. Amazon Polly service available with required languages in your target region
 5. Git installed on your local machine
 
@@ -49,27 +49,37 @@ Before deploying this solution, ensure you have:
 ```bash
 git clone https://github.com/aymenfarag/vocaldocs.git
 cd vocaldocs
+```
 Deploy the Infrastructure
 
 Navigate to the Terraform project directory:
+```bash
 cd "project vocaldocs/Terraform Project"
+```
 
 Initialize Terraform:
+```bash
 terraform init
+```
 
 Review the planned changes:
+```bash
 terraform plan
+```
 
 Apply the infrastructure:
+```bash
 terraform apply
+```
 
-Components
+### Components
 
 CodeBuild Artifacts: Contains the necessary files to build the Docker image for the PDFSplitter Lambda function
 Lambda Functions: Contains the deployment packages for all Lambda functions used in the solution
+
 Static Website: Contains the frontend files for the user interface
 Terraform Project: Contains all IaC files to deploy the required AWS resources
-Contributing
+
 
 Feel free to submit issues and enhancement requests!
 
@@ -79,7 +89,8 @@ License
 
 Contact
 
-[Your contact information or how to reach out for support]
+[aymanahmad@gmail.com]
+
 
 
 ## Detailed Deployment Instructions
