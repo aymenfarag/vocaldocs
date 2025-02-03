@@ -6,9 +6,6 @@ VocalDocs is a solution that converts PDF documents into audio files using Serve
 ![Architecture Diagram](./images/architecture.jpg)
 
 ## Repository Structure
-
-
-
 ```plaintext
 vocaldocs repo
 ├── images
@@ -34,31 +31,7 @@ vocaldocs repo
         ├── terraform.tfvars
         └── variables.tf
 ```
-        
-vocaldocs repo
-├── images
-│   ├── architecture.jpg
-├── README.md
-└── project vocaldocs
-    ├── CodeBuild_Artifacts
-    │   ├── Dockerfile
-    │   ├── lambda_function
-    │   └── requirements
-    ├── Lambda_Function
-    │   ├── ImageConverter.zip
-    │   ├── PollyInvoker.zip
-    │   ├── upload-execution.zip
-    │   └── track-execution.zip
-    ├── Static Website
-    │   ├── index.html
-    │   ├── script.js
-    │   └── style.css
-    └── Terraform Project
-        ├── main.tf
-        ├── outputs.tf
-        ├── terraform.tfvars
-        └── variables.tf
-
+       
 ## Prerequisites
 
 Before deploying this solution, ensure you have:
