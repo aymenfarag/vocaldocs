@@ -7,6 +7,9 @@ VocalDocs is a solution that converts PDF documents into audio files using Serve
 
 ## Repository Structure
 
+
+
+```plaintext
 vocaldocs repo
 ├── images
 │   ├── architecture.jpg
@@ -30,6 +33,7 @@ vocaldocs repo
         ├── outputs.tf
         ├── terraform.tfvars
         └── variables.tf
+```
         
 vocaldocs repo
 ├── images
