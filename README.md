@@ -144,7 +144,30 @@ terraform apply
 Contact [aymanahmad@gmail.com & walid.ahmed.shehata@gmail.com]
 License [Specify your license here]
 
-## Architecture Details & Flow 
+## Architecture Details & Flow
+
+VocalDocs is built using a serverless architecture on AWS, leveraging several key services:
+### Frontend Hosting
+- **Amazon S3**: Hosts the static website files (HTML, JavaScript, and CSS).
+- **Amazon CloudFront**: Serves as a Content Delivery Network (CDN) for the website, improving performance and security.
+  - Configured with Origin Access Control (OAC) to ensure the S3 bucket is not directly accessible.
+
+### Authentication
+- **Amazon Cognito User Pools**: Manages user authentication and authorization.
+
+## User Flow
+
+1. Users access the website through the CloudFront distribution URL.
+2. Before accessing any features, users must authenticate using Cognito User Pools.
+3. Once authenticated, users can:
+   - Submit new TTS requests
+   - Track existing requests they've previously submitted
+
+## Security
+
+- The S3 bucket is not directly accessible to users. All requests are routed through CloudFront.
+- CloudFront is configured with Origin Access Control (OAC) to securely access the S3 bucket.
+- User authentication is required before accessing any service features.
 
 ## Troubleshooting Steps 
 
