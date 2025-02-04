@@ -141,7 +141,7 @@ terraform apply
 
 **Feel free to submit issues and enhancement requests!**
 
-Contact [aymanahmad@gmail.com]
+Contact [aymanahmad@gmail.com & walid.ahmed.shehata@gmail.com]
 License [Specify your license here]
 
 ## Detailed Deployment Instructions
