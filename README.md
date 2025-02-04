@@ -144,10 +144,16 @@ terraform apply
 Contact [aymanahmad@gmail.com & walid.ahmed.shehata@gmail.com]
 License [Specify your license here]
 
-## Detailed Deployment Instructions
+## Architecture Details & Flow 
 
 ## Troubleshooting Steps 
 
-## Architecture Details & Flow 
+In case of any issues, you can check developer tools logs, aws cloudwatch logs for all the components in the solution to troubleshoot the issue
 
+Also, there are some quick checkpoints that can help you debug the flow and figure out where it has been stopped, check those checkpoints:
+
+- document-request-bucket prefix upload/ : If the document upload is completed successfully, you should find a new uploaded object in this prefix under the reference_key, also you should find a new entry in the Dynamo Database Table : Document_Request_db
+- document-request-bucket prefix images/ : If PDF to Image conversion flow (by lambda: PDFSplitter-CONTAINER) is completed successfully, you should find the images exist in this prefix under the reference_key
+- document-request-bucket prefix download/ : If the Image to Text conversion flow (by lambda: ImageConverter) is completed successfully, you should find the output text in this prefix under the reference_key 
+- document-request-bucket prefix download/ : If the Text to Voice conversion flow (by lambda: PollyInvoker) is completed successfully, you should find the final audio file in this prefix under the reference key 
 
