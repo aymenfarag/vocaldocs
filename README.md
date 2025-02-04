@@ -146,7 +146,14 @@ License [Specify your license here]
 
 ## Architecture Details & Flow
 
+# VocalDocs
+
+VocalDocs is a serverless application that converts PDF documents to audio files using AWS services.
+
+## Architecture Details & Flow
+
 VocalDocs is built using a serverless architecture on AWS, leveraging several key services:
+
 ### Frontend Hosting
 - **Amazon S3**: Hosts the static website files (HTML, JavaScript, and CSS).
 - **Amazon CloudFront**: Serves as a Content Delivery Network (CDN) for the website, improving performance and security.
@@ -161,6 +168,7 @@ VocalDocs is built using a serverless architecture on AWS, leveraging several ke
 - **AWS Lambda**: Processes documents and manages workflow.
 - **Amazon SNS**: Facilitates communication between Lambda functions.
 - **Amazon Bedrock**: Provides AI capabilities for text extraction.
+- **Amazon Polly**: Converts text to speech.
 
 ## User Flow
 
@@ -193,6 +201,18 @@ VocalDocs is built using a serverless architecture on AWS, leveraging several ke
    - Sends each image to Amazon Bedrock (Claude Sonnet 3.5 v1) for text extraction
    - Concatenates extracted text from all pages
    - Writes the formatted text file back to S3
+7. S3 event notification triggers the third Lambda function (Text-to-Voice) when a new .txt file is created.
+8. Text-to-Voice:
+   - Retrieves the formatted text file from S3
+   - Passes the text to Amazon Polly for text-to-speech conversion
+   - Writes the resulting audio file back to S3
+   - Updates the DynamoDB record to indicate "Voice-is-ready"
+
+### Tracking Requests
+1. User navigates to the `track-requests.html` page.
+2. This triggers a Lambda function to fetch records from DynamoDB for the authenticated user.
+3. The function returns the status of all jobs submitted by the user.
+4. If a job is complete (Voice-is-ready), the user is presented with an option to play the audio file.
 
 ## Data Management
 - DynamoDB table has TTL enabled, deleting records after 1 week.
@@ -207,8 +227,6 @@ VocalDocs is built using a serverless architecture on AWS, leveraging several ke
 ## Future Enhancements
 - Support for additional document formats beyond PDF.
 - Expansion of supported languages for document processing.
-
-
 
 ## Troubleshooting Steps 
 
