@@ -155,6 +155,13 @@ VocalDocs is built using a serverless architecture on AWS, leveraging several ke
 ### Authentication
 - **Amazon Cognito User Pools**: Manages user authentication and authorization.
 
+### Backend Services
+- **Amazon S3**: Stores uploaded documents and processed files.
+- **Amazon DynamoDB**: Stores metadata about submitted jobs.
+- **AWS Lambda**: Processes documents and manages workflow.
+- **Amazon SNS**: Facilitates communication between Lambda functions.
+- **Amazon Bedrock**: Provides AI capabilities for text extraction.
+
 ## User Flow
 
 1. Users access the website through the CloudFront distribution URL.
@@ -163,11 +170,45 @@ VocalDocs is built using a serverless architecture on AWS, leveraging several ke
    - Submit new TTS requests
    - Track existing requests they've previously submitted
 
+### Submitting a New Request
+1. User navigates to the `new-request.html` page.
+2. User uploads a PDF file (max 5MB).
+3. User selects the document language (currently English or Arabic).
+4. User specifies the starting and ending page ranges.
+5. User submits the request.
+
+### Backend Processing
+1. The document is uploaded to an S3 bucket.
+2. A new record is created in DynamoDB with job details and S3 object location.
+3. DynamoDB Streams trigger a Lambda function (PDF Splitter) when new records are inserted.
+4. PDF Splitter:
+   - Retrieves the document from S3
+   - Splits the PDF into individual pages
+   - Extracts the specified page range
+   - Converts pages to images
+   - Publishes a message to an SNS topic upon completion
+5. A second Lambda function (Images-to-Text) is triggered by the SNS message.
+6. Images-to-Text:
+   - Processes images sequentially
+   - Sends each image to Amazon Bedrock (Claude Sonnet 3.5 v1) for text extraction
+   - Concatenates extracted text from all pages
+   - Writes the formatted text file back to S3
+
+## Data Management
+- DynamoDB table has TTL enabled, deleting records after 1 week.
+- DynamoDB Streams are configured with a filter to trigger Lambda only on new record insertions.
+
 ## Security
 
 - The S3 bucket is not directly accessible to users. All requests are routed through CloudFront.
 - CloudFront is configured with Origin Access Control (OAC) to securely access the S3 bucket.
 - User authentication is required before accessing any service features.
+
+## Future Enhancements
+- Support for additional document formats beyond PDF.
+- Expansion of supported languages for document processing.
+
+
 
 ## Troubleshooting Steps 
 
