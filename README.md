@@ -47,7 +47,7 @@ Before deploying this solution, ensure you have:
 
 1. AWS CLI installed and configured with appropriate credentials
 2. Terraform installed (version 0.12 or later)
-3. Amazon Bedrock LLM (Claud 3.5) enabled in your target AWS region
+3. Amazon Bedrock LLM (Claude 3.5 Sonnet v1.0) enabled in your target AWS region
 4. Amazon Polly service available with required languages in your target region
 5. Git installed on your local machine
 
