@@ -158,12 +158,14 @@ License [Specify your license here]
 
 ## Clean up
 
-    From AWS Console, Go to S3 service, Delete all the objects in S3 bucket **document-request-bucket-vocaldocs** 
+From AWS Console, Go to S3 service, Delete all the objects in S3 bucket **document-request-bucket-vocaldocs** 
 
-    Delete the infrastructure:
+
+Delete the infrastructure:
 ```bash
 terraform destroy
 ```
+
 
 ## Architecture Details & Flow
 
