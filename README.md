@@ -30,6 +30,7 @@ vocaldocs repo
     │   ├── PollyInvoker.zip
     │   ├── upload-execution.zip
     │   └── track-execution.zip
+    |   └── codebuild_invoker.zip 
     ├── Static Website
     │   ├── index.html
     │   ├── script.js
@@ -138,11 +139,31 @@ terraform apply
 
     Deployment: As part of Terraform deployment, you deploy the lambda .zip file
 
+6. **codebuild_invoker**
+
+    Backend 
+
+    This is not part of either the New Request Function or Track Existing Request Function static website flow.
+
+    Goal: It is invoked as part of the terraform deployment which trigger CodeBuild in a cloud native way 
+
+    Deployment: As part of Terraform deployment, you deploy the lambda .zip file
+
 
 **Feel free to submit issues and enhancement requests!**
 
 Contact [aymanahmad@gmail.com & walid.ahmed.shehata@gmail.com]
+
 License [Specify your license here]
+
+## Clean up
+
+    From AWS Console, Go to S3 service, Delete all the objects in S3 bucket **document-request-bucket-vocaldocs** 
+
+    Delete the infrastructure:
+```bash
+terraform destroy
+```
 
 ## Architecture Details & Flow
 

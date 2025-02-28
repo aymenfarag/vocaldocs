@@ -34,6 +34,71 @@ resource "aws_ecr_repository" "pdf_lambda" {
   force_delete = true
 }
 
+# Lambda role for the CodeBuild invoker
+resource "aws_iam_role" "codebuild_invoker_role" {
+  name = "codebuild-invoker-role-${random_string.suffix.result}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+# Policy for the CodeBuild invoker Lambda
+resource "aws_iam_role_policy" "codebuild_invoker_policy" {
+  name = "codebuild-invoker-policy-${random_string.suffix.result}"
+  role = aws_iam_role.codebuild_invoker_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "codebuild:StartBuild",
+          "codebuild:BatchGetBuilds"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# Lambda function to invoke and monitor CodeBuild
+resource "aws_lambda_function" "codebuild_invoker" {
+  filename         = "${path.module}/../Lambda_Functions/codebuild_invoker.zip"
+  function_name    = "codebuild-invoker-${random_string.suffix.result}"
+  role             = aws_iam_role.codebuild_invoker_role.arn
+  handler          = "lambda_function.lambda_handler"
+  runtime          = "python3.13"
+  timeout          = 300
+  memory_size      = 128
+
+  environment {
+    variables = {
+      PROJECT_NAME = aws_codebuild_project.pdf_lambda.name
+      REGION       = var.aws_region
+    }
+  }
+}
+
 # CodeBuild role
 resource "aws_iam_role" "codebuild_role" {
   name = "codebuild-pdf-lambda-role-${random_string.suffix.result}"
@@ -174,112 +239,27 @@ resource "aws_codebuild_project" "pdf_lambda" {
   }
 }
 
-# Wait for image to be ready
-resource "null_resource" "wait_for_image" {
-  triggers = {
-    build_number = null_resource.trigger_build.id
-  }
+# Invoke Lambda to trigger CodeBuild
+resource "aws_lambda_invocation" "invoke_codebuild" {
+  function_name = aws_lambda_function.codebuild_invoker.function_name
+  input = jsonencode({
+    project_name = aws_codebuild_project.pdf_lambda.name
+  })
 
-  provisioner "local-exec" {
-    interpreter = ["PowerShell", "-Command"]
-    command = <<-EOF
-      $maxAttempts = 10
-      $attempt = 1
-      $success = $false
-
-      do {
-        Write-Host "Attempt $attempt of $maxAttempts to check for image..."
-        try {
-          $result = aws ecr describe-images --repository-name ${aws_ecr_repository.pdf_lambda.name} --image-ids imageTag=latest --region ${var.aws_region} --output json
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "Image found!"
-            $success = $true
-            break
-          }
-        } catch {
-          Write-Host "Image not found yet..."
-        }
-        
-        if ($attempt -lt $maxAttempts) {
-          Write-Host "Waiting 30 seconds before next attempt..."
-          Start-Sleep -Seconds 30
-        }
-        $attempt++
-      } while ($attempt -le $maxAttempts)
-
-      if (-not $success) {
-        Write-Host "Failed to find image after $maxAttempts attempts"
-        exit 1
-      }
-    EOF
-  }
-
-  depends_on = [
-    null_resource.trigger_build
-  ]
-}
-
-# Trigger CodeBuild project
-resource "null_resource" "trigger_build" {
   triggers = {
     dockerfile_hash    = filemd5("${path.module}/../CodeBuild_Artifacts/Dockerfile")
     lambda_hash       = filemd5("${path.module}/../CodeBuild_Artifacts/lambda_function.py")
     requirements_hash = filemd5("${path.module}/../CodeBuild_Artifacts/requirements.txt")
   }
 
-  provisioner "local-exec" {
-    interpreter = ["PowerShell", "-Command"]
-    command = <<-EOF
-      $maxAttempts = 3
-      $attempt = 1
-      $success = $false
-
-      do {
-        Write-Host "Build attempt $attempt of $maxAttempts..."
-        
-        # Start the build
-        $buildOutput = aws codebuild start-build --project-name ${aws_codebuild_project.pdf_lambda.name} --region ${var.aws_region} | ConvertFrom-Json
-        $buildId = $buildOutput.build.id
-        Write-Host "Started build with ID: $buildId"
-        
-        # Wait for build to complete
-        do {
-          Start-Sleep -Seconds 10
-          $buildStatus = aws codebuild batch-get-builds --ids $buildId --region ${var.aws_region} | ConvertFrom-Json
-          $status = $buildStatus.builds[0].buildStatus
-          Write-Host "Current build status: $status"
-        } while ($status -eq "IN_PROGRESS")
-        
-        if ($status -eq "SUCCEEDED") {
-          Write-Host "Build completed successfully!"
-          $success = $true
-          break
-        } else {
-          Write-Host "Build failed with status: $status"
-          if ($attempt -lt $maxAttempts) {
-            Write-Host "Waiting 30 seconds before next build attempt..."
-            Start-Sleep -Seconds 30
-          }
-        }
-        
-        $attempt++
-      } while ($attempt -le $maxAttempts)
-
-      if (-not $success) {
-        Write-Host "Failed to complete build successfully after $maxAttempts attempts"
-        exit 1
-      }
-    EOF
-  }
-
   depends_on = [
     aws_codebuild_project.pdf_lambda,
     aws_s3_object.dockerfile,
     aws_s3_object.lambda_function,
-    aws_s3_object.requirements
+    aws_s3_object.requirements,
+    aws_lambda_function.codebuild_invoker
   ]
 }
-
 
 # DynamoDB table
 resource "aws_dynamodb_table" "document_request_db" {
@@ -720,14 +700,6 @@ resource "aws_iam_role_policy" "lambda_pollyinvoker_policy" {
   })
 }
 
-
-
-
-
-
-
-
-
 # PDFSplitter-CONTAINER Lambda
 resource "aws_lambda_function" "pdf_splitter" {
   function_name = "PDFSplitter-CONTAINER-${random_string.suffix.result}"
@@ -744,7 +716,7 @@ resource "aws_lambda_function" "pdf_splitter" {
   }
 
   depends_on = [
-    null_resource.wait_for_image
+    aws_lambda_invocation.invoke_codebuild
   ]
 }
 
@@ -976,8 +948,6 @@ resource "aws_s3_bucket_policy" "website_bucket_policy" {
   })
 }
 
-
-
 # Cognito User Pool
 resource "aws_cognito_user_pool" "user_pool" {
   name = "${var.user_pool_name}-${random_string.suffix.result}"
@@ -1110,7 +1080,6 @@ resource "aws_cognito_user_pool_ui_customization" "main" {
   depends_on = [aws_cognito_user_pool_domain.main]
 }
 
-
 # Cognito User Pool Client
 resource "aws_cognito_user_pool_client" "client" {
   name = "${var.user_pool_client_name}-${random_string.suffix.result}"
@@ -1137,19 +1106,7 @@ resource "aws_cognito_user_pool_client" "client" {
   enable_token_revocation       = true
 
   auth_session_validity = 3 # minutes
-
-
 }
-
-
-
-
-
-
-
-
-
-
 
 # Cognito Identity Pool
 resource "aws_cognito_identity_pool" "main" {
@@ -1190,7 +1147,6 @@ resource "aws_iam_role" "authenticated" {
   })
 }
 
-
 # Add IAM policies for authenticated role
 resource "aws_iam_role_policy" "authenticated_policy" {
   name = "authenticated_policy-${random_string.suffix.result}"
@@ -1217,7 +1173,6 @@ resource "aws_iam_role_policy" "authenticated_policy" {
   })
 }
 
-
 # Attach roles to identity pool
 resource "aws_cognito_identity_pool_roles_attachment" "main" {
   identity_pool_id = aws_cognito_identity_pool.main.id
@@ -1226,7 +1181,6 @@ resource "aws_cognito_identity_pool_roles_attachment" "main" {
     authenticated = aws_iam_role.authenticated.arn
   }
 }
-
 
 # Generate config.js with dynamic values
 resource "local_file" "web_config" {
@@ -1246,8 +1200,6 @@ resource "local_file" "web_config" {
     export default config;
   EOT
 }
-
-
 
 # Upload static files to S3
 resource "aws_s3_object" "static_files" {
@@ -1290,6 +1242,7 @@ resource "aws_s3_object" "config_js" {
 
   depends_on = [local_file.web_config]
 }
+
 
 
 
