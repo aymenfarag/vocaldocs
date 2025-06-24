@@ -1,5 +1,29 @@
+# Terraform
 .terraform/
-.terraform.lock.hcl
-terraform.tfstate
-terraform.tfstate.backup
-project vocaldocs/Static Website/config.js
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform.tfstate.lock.info
+.terraformrc
+terraform.rc
+
+# Project
+src/static_website/config.js
+src/lambda_functions/*.zip
+
+# Mac
+.DS_Store
+
+# Python
+.env
+
+# Security
+ash_output/*
+
+# Other
+*.bkp

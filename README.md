@@ -3,68 +3,45 @@
 VocalDocs is a solution that converts PDF documents into audio files using Serverless Event Driven Architecture on AWS. This repository contains all the necessary code and Terraform infrastructure as code (IaC) to deploy the solution.
 
 ## Architecture
-![Architecture Diagram](./images/architecture.jpg)
+![Architecture Diagram](./images/architecture.png)
 
-## Repository HL Structure
-**CodeBuild Artifacts**: Contains the necessary files to build the Docker image for the PDFSplitter Lambda function
+### Architecture Walkthrough
 
-**Lambda Functions**: Contains the deployment packages for all Lambda functions used in the solution
+1. During `terraform apply` deployment, assets are uploaded to the build artifacts Simple Storage Service (S3) bucket.
+2. An AWS Lambda function triggers an AWS CodeBuild project that builds the container image for the Document Splitter function and stores it in the Amazon Elastic Container Registry (ECR).
+3. The Document Splitter AWS Lambda function is deployed using the image from ECR.
+4. After deployment, a user loads the website via the Amazon CloudFront domain url, which serves the static website content from the associated Amazon S3 bucket.
+5. The user authenticates via Amazon Cognito and receives temporary credentials for interacting with the service AWS Lambda functions.
+6. Via the website UI, the user uploads a PDF document to the Upload Execution AWS Lambda function. It creates a job entry in the Amazon DynamoDB table and stores the PDF in the Document Data Amazon S3 bucket.
+7. The new job entry in the Amazon DynamoDB table is processed by the associated DynamoDB Stream which triggers the Document Splitter function. It converts the pages of the document it got from the Amazon S3 bucket to images, stores them back in it, updates the job status in the Amazon DynamoDB table and sends a notification to an Amazon Simple Notification Service (SNS) topic.
+8. The Image To Text AWS Lambda function is subscribed to the SNS topic and triggered with the notification. It uses Amazon Bedrock to extract the text from the images it got from the Amazon S3 bucket and puts the result back into it.
+9. An Amazon S3 event notification triggers the Text To Voice AWS Lambda function which gets the text file from the bucket, uses Amazon Polly to convert it to an audio file in MP3 format and stores it back in the bucket.
+10. Navigating to the Existing Requests page in the UI, the website triggers the Track Execution AWS Lambda function. It lists all jobs including their current status and provides pre-signed URLs for the audio files of the finished jobs for downloading the MP3 files and playing them directly in supported browsers.
 
-**Static Website**: Contains the frontend files for the user interface
-
-**Terraform Project**: Contains all IaC files to deploy the required AWS resources
-
-## Repository Detailed Structure
-```plaintext
-vocaldocs repo
-├── images
-│   ├── architecture.jpg
-├── README.md
-└── project vocaldocs
-    ├── CodeBuild_Artifacts
-    │   ├── Dockerfile
-    │   ├── lambda_function
-    │   └── requirements
-    ├── Lambda_Function
-    │   ├── ImageConverter.zip
-    │   ├── PollyInvoker.zip
-    │   ├── upload-execution.zip
-    │   └── track-execution.zip
-    |   └── codebuild_invoker.zip 
-    ├── Static Website
-    │   ├── index.html
-    │   ├── script.js
-    │   └── style.css
-    └── Terraform Project
-        ├── main.tf
-        ├── outputs.tf
-        ├── terraform.tfvars
-        └── variables.tf
-```
-       
 ## Prerequisites
 
 Before deploying this solution, ensure you have:
 
-1. AWS CLI installed and configured with appropriate credentials
-2. Terraform installed (version 0.12 or later)
-3. Amazon Bedrock LLM (Claude 3.5 Sonnet v1.0) enabled in your target AWS region
-4. Amazon Polly service available with required languages in your target region
-5. Git installed on your local machine
+1. [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) installed and configured with appropriate credentials
+1. [Terraform](https://developer.hashicorp.com/terraform/install) installed (version 1.12 or later)
+1. [Git](https://git-scm.com/) installed on your local machine
+1. Amazon Bedrock LLM (Claude 3.5 Sonnet v1.0) enabled in your target AWS region ([check for region availability](https://docs.aws.amazon.com/bedrock/latest/userguide/models-regions.html))
+1. Amazon Polly service with required languages [available in your target region](https://docs.aws.amazon.com/general/latest/gr/pol.html)
 
 ## Getting Started
 
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/aymenfarag/vocaldocs.git
-cd vocaldocs
+git clone git@ssh.gitlab.aws.dev:aws-migration-sa-emea/vocaldocs-repo-gitlab.git
+cd vocaldocs-repo-gitlab
 ```
-Deploy the Infrastructure
+
+### Deploy the Infrastructure
 
 Navigate to the Terraform project directory:
 ```bash
-cd "project vocaldocs/Terraform Project"
+cd "src/terraform_project"
 ```
 
 Initialize Terraform:
@@ -82,118 +59,17 @@ Apply the infrastructure:
 terraform apply
 ```
 
-### Lambda Functions
-1. **upload-execution**
+Open the Amazon CloudFront URL this command produces as last output (`website_url =`) in your browser.
 
-    Frontend
+### Create an Amazon Cognito User
 
-    Part of New Request Function static website flow
+In another tab, navigate to the [Amazon Cognito User Pools page](https://console.aws.amazon.com/cognito/v2/idp/user-pools) in the AWS Console. Ensure that you are in the region you deployed the solution to. You will find a user pool starting with `vocaldocs-user-pool`, choose it.
 
-    Invocation: From static website Javascript with Cognito
+In the left hand navigation pane under **User Management**, choose **Users**. Choose the **Create user** button and create your user.
 
-    Goal: This lambda function will upload the pdf document to S3 bucket under prefix upload/ then will save the metadata to a Dynamo_db table
+Return to the application tab and log in with your newly created user.
 
-    Deployment: As part of Terraform deployment, you deploy the lambda .zip file
-2. **track-execution**
-
-    Frontend
-
-    Part of Track Existing Request Function static website flow
-
-    Invocation: From static website Javascript with Cognito
-
-    Goal: This lambda function will check the Dynamo_db table and retrieve all the ready voice for all uploaded documents by that user and it will create a pre-signed url for the user
-
-    Deployment: As part of Terraform deployment, you deploy the lambda .zip file
-3. **PDFSplitter-CONTAINER**
-
-    Backend 
-
-    Part of New Request Function static website flow 
-
-    Invocation: From Dynamo DB Stream "If New Raw Added" 
-
-    Goal: PDF to Image conversion 
-
-    Deployment: As part of Terraform deployment, you deploy CodeBuild artifact to build the image that will be used to run this lambda function
-4. **ImageConverter**
-
-    Backend 
-
-    Part of New Request Function static website flow 
-
-    Invocation: From SNS Integration with Topic:Images-Text-BedrockInvoker
-
-    Goal: Initiate API call with LLM model to convert each image to a clear text 
-
-    Deployment: As part of Terraform deployment, you deploy the lambda .zip file
-5. **PollyInvoker**
-
-    Backend 
-
-    Part of New Request Function static website flow 
-
-    Invocation: From S3 event notification if there is new .txt file is uploaded to S3 bucket under prefix download/
-
-    Goal: Initiate API call with Polly to read the final text file into the selected language
-
-    Deployment: As part of Terraform deployment, you deploy the lambda .zip file
-
-6. **codebuild_invoker**
-
-    Backend 
-
-    This is not part of either the New Request Function or Track Existing Request Function static website flow.
-
-    Goal: It is invoked as part of the terraform deployment which trigger CodeBuild in a cloud native way 
-
-    Deployment: As part of Terraform deployment, you deploy the lambda .zip file
-
-
-**Feel free to submit issues and enhancement requests!**
-
-Contact [aymanahmad@gmail.com & walid.ahmed.shehata@gmail.com]
-
-License [Specify your license here]
-
-## Clean up
-
-From AWS Console, Go to S3 service, Delete all the objects in S3 bucket **document-request-bucket-vocaldocs** 
-
-
-Delete the infrastructure:
-```bash
-terraform destroy
-```
-
-
-## Architecture Details & Flow
-
-# VocalDocs
-
-VocalDocs is a serverless application that converts PDF documents to audio files using AWS services.
-
-## Architecture Details & Flow
-
-VocalDocs is built using a serverless architecture on AWS, leveraging several key services:
-
-### Frontend Hosting
-- **Amazon S3**: Hosts the static website files (HTML, JavaScript, and CSS).
-- **Amazon CloudFront**: Serves as a Content Delivery Network (CDN) for the website, improving performance and security.
-  - Configured with Origin Access Control (OAC) to ensure the S3 bucket is not directly accessible.
-
-### Authentication
-- **Amazon Cognito User Pools**: Manages user authentication and authorization.
-
-### Backend Services
-- **Amazon S3**: Stores uploaded documents and processed files.
-- **Amazon DynamoDB**: Stores metadata about submitted jobs.
-- **AWS Lambda**: Processes documents and manages workflow.
-- **Amazon SNS**: Facilitates communication between Lambda functions.
-- **Amazon Bedrock**: Provides AI capabilities for text extraction.
-- **Amazon Polly**: Converts text to speech.
-
-## User Flow
+### User Flow
 
 1. Users access the website through the CloudFront distribution URL.
 2. Before accessing any features, users must authenticate using Cognito User Pools.
@@ -201,14 +77,14 @@ VocalDocs is built using a serverless architecture on AWS, leveraging several ke
    - Submit new TTS requests
    - Track existing requests they've previously submitted
 
-### Submitting a New Request
+#### Submitting a New Request
 1. User navigates to the `new-request.html` page.
 2. User uploads a PDF file (max 5MB).
 3. User selects the document language (currently English or Arabic).
 4. User specifies the starting and ending page ranges.
 5. User submits the request.
 
-### Backend Processing
+#### Backend Processing
 1. The document is uploaded to an S3 bucket.
 2. A new record is created in DynamoDB with job details and S3 object location.
 3. DynamoDB Streams trigger a Lambda function (PDF Splitter) when new records are inserted.
@@ -231,25 +107,11 @@ VocalDocs is built using a serverless architecture on AWS, leveraging several ke
    - Writes the resulting audio file back to S3
    - Updates the DynamoDB record to indicate "Voice-is-ready"
 
-### Tracking Requests
+#### Tracking Requests
 1. User navigates to the `track-requests.html` page.
 2. This triggers a Lambda function to fetch records from DynamoDB for the authenticated user.
 3. The function returns the status of all jobs submitted by the user.
 4. If a job is complete (Voice-is-ready), the user is presented with an option to play the audio file.
-
-## Data Management
-- DynamoDB table has TTL enabled, deleting records after 1 week.
-- DynamoDB Streams are configured with a filter to trigger Lambda only on new record insertions.
-
-## Security
-
-- The S3 bucket is not directly accessible to users. All requests are routed through CloudFront.
-- CloudFront is configured with Origin Access Control (OAC) to securely access the S3 bucket.
-- User authentication is required before accessing any service features.
-
-## Future Enhancements
-- Support for additional document formats beyond PDF.
-- Expansion of supported languages for document processing.
 
 ## Troubleshooting Steps 
 
@@ -262,3 +124,35 @@ Also, there are some quick checkpoints that can help you debug the flow and figu
 - document-request-bucket prefix download/ : If the Image to Text conversion flow (by lambda: ImageConverter) is completed successfully, you should find the output text in this prefix under the reference_key 
 - document-request-bucket prefix download/ : If the Text to Voice conversion flow (by lambda: PollyInvoker) is completed successfully, you should find the final audio file in this prefix under the reference key 
 
+## Clean up
+
+Delete the infrastructure:
+```bash
+terraform destroy
+```
+
+## Additional Technical Information
+
+### Data Management
+- DynamoDB table has TTL enabled, deleting records after 1 week.
+- DynamoDB Streams are configured with a filter to trigger Lambda only on new record insertions.
+
+### Security
+
+- The S3 bucket is not directly accessible to users. All requests are routed through CloudFront.
+- CloudFront is configured with Origin Access Control (OAC) to securely access the S3 bucket.
+- User authentication is required before accessing any service features.
+
+## Future Enhancements
+- Support for additional document formats beyond PDF.
+- Expansion of supported languages for document processing.
+
+## Contact
+
+Feel free to submit issues, feature requests and pull requests (see [contribution](./CONTRIBUTING.MD) and [development](./DEVELOPING.MD) information)!
+
+For any other purposes, contact [Aymen Farag](aymenaly@amazon.ae) and [Walid Shehata Elsaid](wshehata@amazon.ae).
+
+## License
+
+This project is licensed under the terms of the MIT license.

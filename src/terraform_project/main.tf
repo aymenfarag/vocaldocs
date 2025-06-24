@@ -1,25 +1,19 @@
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.83.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.0"
-    }
-  }
-}
+# MIT No Attribution
+#
+# Copyright 2025 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy of
+# this software and associated documentation files (the "Software"), to deal in
+# the Software without restriction, including without limitation the rights to
+# use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+# the Software, and to permit persons to whom the Software is furnished to do so.
 
-provider "aws" {
-  region = var.aws_region
-}
-
-data "aws_caller_identity" "current" {}
-
-data "local_file" "static_website_files" {
-  filename = "${path.module}/../Static Website/index.html"
-}
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 # Random suffix for unique resource names
 resource "random_string" "suffix" {
@@ -29,74 +23,14 @@ resource "random_string" "suffix" {
 }
 
 # ECR Repository
+#tfsec:ignore:aws-ecr-repository-customer-key
 resource "aws_ecr_repository" "pdf_lambda" {
-  name = "pdf-lambda-${random_string.suffix.result}"
+  name         = "pdf-lambda-${random_string.suffix.result}"
   force_delete = true
-}
-
-# Lambda role for the CodeBuild invoker
-resource "aws_iam_role" "codebuild_invoker_role" {
-  name = "codebuild-invoker-role-${random_string.suffix.result}"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "lambda.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
-
-# Policy for the CodeBuild invoker Lambda
-resource "aws_iam_role_policy" "codebuild_invoker_policy" {
-  name = "codebuild-invoker-policy-${random_string.suffix.result}"
-  role = aws_iam_role.codebuild_invoker_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Resource = "arn:aws:logs:*:*:*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "codebuild:StartBuild",
-          "codebuild:BatchGetBuilds"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-# Lambda function to invoke and monitor CodeBuild
-resource "aws_lambda_function" "codebuild_invoker" {
-  filename         = "${path.module}/../Lambda_Functions/codebuild_invoker.zip"
-  function_name    = "codebuild-invoker-${random_string.suffix.result}"
-  role             = aws_iam_role.codebuild_invoker_role.arn
-  handler          = "lambda_function.lambda_handler"
-  runtime          = "python3.13"
-  timeout          = 300
-  memory_size      = 128
-
-  environment {
-    variables = {
-      PROJECT_NAME = aws_codebuild_project.pdf_lambda.name
-      REGION       = var.aws_region
-    }
+  image_scanning_configuration {
+    scan_on_push = true
   }
+  image_tag_mutability = "IMMUTABLE"
 }
 
 # CodeBuild role
@@ -110,7 +44,7 @@ resource "aws_iam_role" "codebuild_role" {
         Action = "sts:AssumeRole"
         Effect = "Allow"
         Principal = {
-          Service = "codebuild.amazonaws.com"
+          Service = "codebuild.${data.aws_partition.current.dns_suffix}"
         }
       }
     ]
@@ -126,7 +60,7 @@ resource "aws_iam_role_policy" "codebuild_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
+        Effect   = "Allow"
         Resource = ["*"]
         Action = [
           "logs:CreateLogGroup",
@@ -148,8 +82,8 @@ resource "aws_iam_role_policy" "codebuild_policy" {
         ]
       },
       {
-        Effect = "Allow"
-        Action = "ecr:GetAuthorizationToken",
+        Effect   = "Allow"
+        Action   = "ecr:GetAuthorizationToken",
         Resource = "*"
       },
       {
@@ -168,28 +102,48 @@ resource "aws_iam_role_policy" "codebuild_policy" {
 }
 
 # S3 bucket for build artifacts
+#tfsec:ignore:aws-s3-encryption-customer-key #tfsec:ignore:aws-s3-enable-bucket-logging #tfsec:ignore:aws-s3-enable-versioning
 resource "aws_s3_bucket" "build_artifacts" {
-  bucket = "codebuild-artifacts-${random_string.suffix.result}"
+  bucket        = "codebuild-artifacts-${random_string.suffix.result}"
   force_destroy = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "build_artifacts" {
+  bucket = aws_s3_bucket.build_artifacts.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "build_artifacts" {
+  bucket = aws_s3_bucket.build_artifacts.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
 # Upload build files to S3
 resource "aws_s3_object" "dockerfile" {
   bucket = aws_s3_bucket.build_artifacts.id
   key    = "build/Dockerfile"
-  source = "${path.module}/../CodeBuild_Artifacts/Dockerfile"
+  source = "${path.module}/../codebuild_artifacts/Dockerfile"
 }
 
 resource "aws_s3_object" "lambda_function" {
   bucket = aws_s3_bucket.build_artifacts.id
   key    = "build/lambda_function.py"
-  source = "${path.module}/../CodeBuild_Artifacts/lambda_function.py"
+  source = "${path.module}/../codebuild_artifacts/lambda_function.py"
 }
 
 resource "aws_s3_object" "requirements" {
   bucket = aws_s3_bucket.build_artifacts.id
   key    = "build/requirements.txt"
-  source = "${path.module}/../CodeBuild_Artifacts/requirements.txt"
+  source = "${path.module}/../codebuild_artifacts/requirements.txt"
 }
 
 # CodeBuild project
@@ -202,20 +156,28 @@ resource "aws_codebuild_project" "pdf_lambda" {
   }
 
   environment {
-    type                        = "LINUX_CONTAINER"
-    compute_type                = "BUILD_GENERAL1_SMALL"
-    image                      = "aws/codebuild/amazonlinux2-x86_64-standard:4.0"
-    privileged_mode            = true
+    type            = "LINUX_CONTAINER"
+    compute_type    = "BUILD_GENERAL1_SMALL"
+    image           = "aws/codebuild/amazonlinux2-x86_64-standard:4.0"
+    privileged_mode = true
 
     environment_variable {
       name  = "ECR_REPOSITORY_URI"
       value = aws_ecr_repository.pdf_lambda.repository_url
     }
+    environment_variable {
+      name  = "SNS_TOPIC_NAME"
+      value = aws_sns_topic.vocaldocs_topic.name
+    }
+    environment_variable {
+      name  = "DYNAMODB_TABLE"
+      value = aws_dynamodb_table.document_request_db.name
+    }
   }
 
   source {
-    type      = "S3"
-    location  = "${aws_s3_bucket.build_artifacts.id}/build/"
+    type     = "S3"
+    location = "${aws_s3_bucket.build_artifacts.id}/build/"
     buildspec = jsonencode({
       version = "0.2"
       phases = {
@@ -239,6 +201,80 @@ resource "aws_codebuild_project" "pdf_lambda" {
   }
 }
 
+# Lambda role for the CodeBuild invoker
+resource "aws_iam_role" "codebuild_invoker_role" {
+  name = "codebuild-invoker-role-${random_string.suffix.result}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.${data.aws_partition.current.dns_suffix}"
+        }
+      }
+    ]
+  })
+}
+
+# Policy for the CodeBuild invoker Lambda
+resource "aws_iam_role_policy" "codebuild_invoker_policy" {
+  name = "codebuild-invoker-policy-${random_string.suffix.result}"
+  role = aws_iam_role.codebuild_invoker_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "codebuild:BatchGetBuilds"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "codebuild:StartBuild",
+        ]
+        Resource = aws_codebuild_project.pdf_lambda.arn
+      }
+    ]
+  })
+}
+
+# Lambda function to invoke and monitor CodeBuild
+resource "aws_lambda_function" "codebuild_invoker" {
+  filename         = "${path.module}/../lambda_functions/codebuild_invoker.zip"
+  function_name    = "codebuild-invoker-${random_string.suffix.result}"
+  role             = aws_iam_role.codebuild_invoker_role.arn
+  handler          = "lambda_function.lambda_handler"
+  runtime          = "python3.13"
+  timeout          = 300
+  memory_size      = 128
+  source_code_hash = filebase64sha256(data.archive_file.codebuild_invoker_lambda_package.output_path)
+  tracing_config {
+    mode = "Active"
+  }
+
+  environment {
+    variables = {
+      PROJECT_NAME = aws_codebuild_project.pdf_lambda.name
+    }
+  }
+}
+
 # Invoke Lambda to trigger CodeBuild
 resource "aws_lambda_invocation" "invoke_codebuild" {
   function_name = aws_lambda_function.codebuild_invoker.function_name
@@ -247,9 +283,9 @@ resource "aws_lambda_invocation" "invoke_codebuild" {
   })
 
   triggers = {
-    dockerfile_hash    = filemd5("${path.module}/../CodeBuild_Artifacts/Dockerfile")
-    lambda_hash       = filemd5("${path.module}/../CodeBuild_Artifacts/lambda_function.py")
-    requirements_hash = filemd5("${path.module}/../CodeBuild_Artifacts/requirements.txt")
+    dockerfile_hash   = filemd5("${path.module}/../codebuild_artifacts/Dockerfile")
+    lambda_hash       = filemd5("${path.module}/../codebuild_artifacts/lambda_function.py")
+    requirements_hash = filemd5("${path.module}/../codebuild_artifacts/requirements.txt")
   }
 
   depends_on = [
@@ -262,10 +298,11 @@ resource "aws_lambda_invocation" "invoke_codebuild" {
 }
 
 # DynamoDB table
+#tfsec:ignore:aws-dynamodb-enable-recovery #tfsec:ignore:aws-dynamodb-table-customer-key
 resource "aws_dynamodb_table" "document_request_db" {
-  name           = "${var.dynamodb_table_name}-${random_string.suffix.result}"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "reference_key"
+  name         = "${var.dynamodb_table_name}-${random_string.suffix.result}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "reference_key"
 
   attribute {
     name = "reference_key"
@@ -279,41 +316,33 @@ resource "aws_dynamodb_table" "document_request_db" {
     attribute_name = "ExpiresAt"
     enabled        = true
   }
+  server_side_encryption {
+    enabled = true
+  }
 }
 
 # SNS Topic
+#tfsec:ignore:aws-sns-topic-encryption-use-cmk
 resource "aws_sns_topic" "vocaldocs_topic" {
-  name = "${var.sns_topic_name}-${random_string.suffix.result}"
-}
-
-# Parameter Store Variables
-resource "aws_ssm_parameter" "dynamodb_table_name" {
-  name  = "/vocaldocs/dynamodbtablename-${random_string.suffix.result}"
-  type  = "String"
-  value = aws_dynamodb_table.document_request_db.name
-}
-
-resource "aws_ssm_parameter" "region_name" {
-  name  = "/vocaldocs/regionname-${random_string.suffix.result}"
-  type  = "String"
-  value = var.aws_region
-}
-
-resource "aws_ssm_parameter" "s3_bucket_name" {
-  name  = "/vocaldocs/s3projectandmediabucket-${random_string.suffix.result}"
-  type  = "String"
-  value = aws_s3_bucket.document_bucket.id
-}
-
-resource "aws_ssm_parameter" "sns_topic_name" {
-  name  = "/vocaldocs/snstopicname-${random_string.suffix.result}"
-  type  = "String"
-  value = aws_sns_topic.vocaldocs_topic.name
+  name              = "${var.sns_topic_name}-${random_string.suffix.result}"
+  kms_master_key_id = "alias/aws/sns"
 }
 
 # Document Request Bucket
+#tfsec:ignore:aws-s3-encryption-customer-key #tfsec:ignore:aws-s3-enable-bucket-logging #tfsec:ignore:aws-s3-enable-versioning
 resource "aws_s3_bucket" "document_bucket" {
-  bucket = "${var.document_bucket_name}-${random_string.suffix.result}"
+  bucket        = "${var.document_bucket_name}-${random_string.suffix.result}"
+  force_destroy = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "document_bucket" {
+  bucket = aws_s3_bucket.document_bucket.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
 }
 
 # Block public access for document bucket
@@ -342,7 +371,7 @@ resource "aws_s3_object" "download_prefix" {
 # New five roles and policies for the five lambda functions
 # 1. Lambda Upload Execution Role and Policy
 resource "aws_iam_role" "lambda_upload_execution_role" {
-  name = "lambda-upload-execution-${random_string.suffix.result}"
+  name = "lambda-upload_execution-${random_string.suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -351,7 +380,7 @@ resource "aws_iam_role" "lambda_upload_execution_role" {
         Action = "sts:AssumeRole"
         Effect = "Allow"
         Principal = {
-          Service = "lambda.amazonaws.com"
+          Service = "lambda.${data.aws_partition.current.dns_suffix}"
         }
       }
     ]
@@ -372,7 +401,7 @@ resource "aws_iam_role_policy" "lambda_upload_execution_policy" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:*:*:*"
+        Resource = "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
       },
       {
         Effect = "Allow"
@@ -396,11 +425,6 @@ resource "aws_iam_role_policy" "lambda_upload_execution_policy" {
           "dynamodb:Scan"
         ]
         Resource = aws_dynamodb_table.document_request_db.arn
-      },
-      {
-        Effect = "Allow"
-        Action = "ssm:GetParameter"
-        Resource = "arn:aws:ssm:*:*:parameter/vocaldocs/*"
       }
     ]
   })
@@ -408,7 +432,7 @@ resource "aws_iam_role_policy" "lambda_upload_execution_policy" {
 
 # 2. Lambda Track Execution Role and Policy
 resource "aws_iam_role" "lambda_track_execution_role" {
-  name = "lambda-track-execution-${random_string.suffix.result}"
+  name = "lambda-track_execution-${random_string.suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -417,7 +441,7 @@ resource "aws_iam_role" "lambda_track_execution_role" {
         Action = "sts:AssumeRole"
         Effect = "Allow"
         Principal = {
-          Service = "lambda.amazonaws.com"
+          Service = "lambda.${data.aws_partition.current.dns_suffix}"
         }
       }
     ]
@@ -438,7 +462,7 @@ resource "aws_iam_role_policy" "lambda_track_execution_policy" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:*:*:*"
+        Resource = "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
       },
       {
         Effect = "Allow"
@@ -462,11 +486,6 @@ resource "aws_iam_role_policy" "lambda_track_execution_policy" {
           "dynamodb:Scan"
         ]
         Resource = aws_dynamodb_table.document_request_db.arn
-      },
-      {
-        Effect = "Allow"
-        Action = "ssm:GetParameter"
-        Resource = "arn:aws:ssm:*:*:parameter/vocaldocs/*"
       }
     ]
   })
@@ -483,7 +502,7 @@ resource "aws_iam_role" "lambda_pdfsplitter_container_role" {
         Action = "sts:AssumeRole"
         Effect = "Allow"
         Principal = {
-          Service = "lambda.amazonaws.com"
+          Service = "lambda.${data.aws_partition.current.dns_suffix}"
         }
       }
     ]
@@ -504,7 +523,7 @@ resource "aws_iam_role_policy" "lambda_pdfsplitter_container_policy" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:*:*:*"
+        Resource = "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
       },
       {
         Effect = "Allow"
@@ -532,30 +551,31 @@ resource "aws_iam_role_policy" "lambda_pdfsplitter_container_policy" {
           "dynamodb:ListStreams"
         ]
         Resource = [aws_dynamodb_table.document_request_db.arn,
-        "${aws_dynamodb_table.document_request_db.arn}/stream/*"
+          "${aws_dynamodb_table.document_request_db.arn}/stream/*"
         ]
       },
       {
         Effect = "Allow"
-        Action = "ssm:GetParameter"
-        Resource = "arn:aws:ssm:*:*:parameter/vocaldocs/*"
+        Action = [
+          "sns:ListTopics"
+        ]
+        Resource = "arn:${data.aws_partition.current.partition}:sns:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
       },
       {
         Effect = "Allow"
         Action = [
           "sns:Publish",
           "sns:Subscribe",
-          "sns:ListTopics"
         ]
-        Resource = "arn:aws:sns:*:*:*"
+        Resource = aws_sns_topic.vocaldocs_topic.arn
       }
     ]
   })
 }
 
-# 4. Lambda ImageConverter Role and Policy
-resource "aws_iam_role" "lambda_imageconverter_role" {
-  name = "lambda-ImageConverter-${random_string.suffix.result}"
+# 4. Lambda image_converter Role and Policy
+resource "aws_iam_role" "lambda_image_converter_role" {
+  name = "lambda-image_converter-${random_string.suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -564,16 +584,16 @@ resource "aws_iam_role" "lambda_imageconverter_role" {
         Action = "sts:AssumeRole"
         Effect = "Allow"
         Principal = {
-          Service = "lambda.amazonaws.com"
+          Service = "lambda.${data.aws_partition.current.dns_suffix}"
         }
       }
     ]
   })
 }
 
-resource "aws_iam_role_policy" "lambda_imageconverter_policy" {
-  name = "lambda_imageconverter_policy-${random_string.suffix.result}"
-  role = aws_iam_role.lambda_imageconverter_role.id
+resource "aws_iam_role_policy" "lambda_image_converter_policy" {
+  name = "lambda_image_converter_policy-${random_string.suffix.result}"
+  role = aws_iam_role.lambda_image_converter_role.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -585,7 +605,7 @@ resource "aws_iam_role_policy" "lambda_imageconverter_policy" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:*:*:*"
+        Resource = "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
       },
       {
         Effect = "Allow"
@@ -609,11 +629,6 @@ resource "aws_iam_role_policy" "lambda_imageconverter_policy" {
           "dynamodb:Scan"
         ]
         Resource = aws_dynamodb_table.document_request_db.arn
-      },
-      {
-        Effect = "Allow"
-        Action = "ssm:GetParameter"
-        Resource = "arn:aws:ssm:*:*:parameter/vocaldocs/*"
       },
       {
         Effect = "Allow"
@@ -627,9 +642,9 @@ resource "aws_iam_role_policy" "lambda_imageconverter_policy" {
   })
 }
 
-# 5. Lambda PollyInvoker Role and Policy
-resource "aws_iam_role" "lambda_pollyinvoker_role" {
-  name = "lambda-PollyInvoker-${random_string.suffix.result}"
+# 5. Lambda polly_invoker Role and Policy
+resource "aws_iam_role" "lambda_polly_invoker_role" {
+  name = "lambda-polly_invoker-${random_string.suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -638,16 +653,16 @@ resource "aws_iam_role" "lambda_pollyinvoker_role" {
         Action = "sts:AssumeRole"
         Effect = "Allow"
         Principal = {
-          Service = "lambda.amazonaws.com"
+          Service = "lambda.${data.aws_partition.current.dns_suffix}"
         }
       }
     ]
   })
 }
 
-resource "aws_iam_role_policy" "lambda_pollyinvoker_policy" {
-  name = "lambda_pollyinvoker_policy-${random_string.suffix.result}"
-  role = aws_iam_role.lambda_pollyinvoker_role.id
+resource "aws_iam_role_policy" "lambda_polly_invoker_policy" {
+  name = "lambda_polly_invoker_policy-${random_string.suffix.result}"
+  role = aws_iam_role.lambda_polly_invoker_role.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -659,7 +674,7 @@ resource "aws_iam_role_policy" "lambda_pollyinvoker_policy" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:*:*:*"
+        Resource = "arn:${data.aws_partition.current.partition}:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
       },
       {
         Effect = "Allow"
@@ -686,13 +701,9 @@ resource "aws_iam_role_policy" "lambda_pollyinvoker_policy" {
       },
       {
         Effect = "Allow"
-        Action = "ssm:GetParameter"
-        Resource = "arn:aws:ssm:*:*:parameter/vocaldocs/*"
-      },
-      {
-        Effect = "Allow"
         Action = [
-          "polly:*"
+          "polly:GetSpeechSynthesisTask",
+          "polly:StartSpeechSynthesisTask",
         ]
         Resource = "*"
       }
@@ -708,10 +719,14 @@ resource "aws_lambda_function" "pdf_splitter" {
   role          = aws_iam_role.lambda_pdfsplitter_container_role.arn
   timeout       = 60
   memory_size   = 512
+  tracing_config {
+    mode = "Active"
+  }
 
   environment {
     variables = {
-      RANDOM_SUFFIX = random_string.suffix.result
+      DYNAMODB_TABLE = aws_dynamodb_table.document_request_db.name
+      SNS_TOPIC_NAME = aws_sns_topic.vocaldocs_topic.name
     }
   }
 
@@ -742,24 +757,27 @@ resource "aws_lambda_event_source_mapping" "pdf_splitter_trigger" {
   }
 }
 
-# ImageConverter Lambda
+# image_converter Lambda
 resource "aws_lambda_function" "image_converter" {
-  filename         = "${path.module}/../Lambda_Functions/ImageConverter.ZIP"
-  function_name    = "ImageConverter-${random_string.suffix.result}"
-  role             = aws_iam_role.lambda_imageconverter_role.arn
+  filename         = "${path.module}/../lambda_functions/image_converter.zip"
+  function_name    = "image_converter-${random_string.suffix.result}"
+  role             = aws_iam_role.lambda_image_converter_role.arn
   handler          = "lambda_function.lambda_handler"
   runtime          = "python3.13"
   timeout          = 300
   memory_size      = 128
-  source_code_hash = filebase64sha256("${path.module}/../Lambda_Functions/ImageConverter.ZIP")
+  source_code_hash = filebase64sha256(data.archive_file.image_converter_lambda_package.output_path)
+  tracing_config {
+    mode = "Active"
+  }
   environment {
     variables = {
-      RANDOM_SUFFIX = random_string.suffix.result
+      DYNAMODB_TABLE = aws_dynamodb_table.document_request_db.name
     }
   }
 }
 
-# SNS Topic Subscription for ImageConverter
+# SNS Topic Subscription for image_converter
 resource "aws_sns_topic_subscription" "image_converter" {
   topic_arn = aws_sns_topic.vocaldocs_topic.arn
   protocol  = "lambda"
@@ -771,28 +789,31 @@ resource "aws_lambda_permission" "sns_image_converter" {
   statement_id  = "AllowSNSInvoke-${random_string.suffix.result}"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.image_converter.arn
-  principal     = "sns.amazonaws.com"
+  principal     = "sns.${data.aws_partition.current.dns_suffix}"
   source_arn    = aws_sns_topic.vocaldocs_topic.arn
 }
 
-# PollyInvoker Lambda
+# polly_invoker Lambda
 resource "aws_lambda_function" "polly_invoker" {
-  filename         = "${path.module}/../Lambda_Functions/PollyInvoker.ZIP"
-  function_name    = "PollyInvoker-${random_string.suffix.result}"
-  role             = aws_iam_role.lambda_pollyinvoker_role.arn
+  filename         = "${path.module}/../lambda_functions/polly_invoker.zip"
+  function_name    = "polly_invoker-${random_string.suffix.result}"
+  role             = aws_iam_role.lambda_polly_invoker_role.arn
   handler          = "lambda_function.lambda_handler"
   runtime          = "python3.13"
   timeout          = 120
   memory_size      = 128
-  source_code_hash = filebase64sha256("${path.module}/../Lambda_Functions/PollyInvoker.ZIP")
+  source_code_hash = filebase64sha256(data.archive_file.polly_invoker_lambda_package.output_path)
+  tracing_config {
+    mode = "Active"
+  }
   environment {
     variables = {
-      RANDOM_SUFFIX = random_string.suffix.result
+      DYNAMODB_TABLE = aws_dynamodb_table.document_request_db.name
     }
   }
 }
 
-# S3 Event notification for PollyInvoker
+# S3 Event notification for polly_invoker
 resource "aws_s3_bucket_notification" "bucket_notification" {
   bucket = aws_s3_bucket.document_bucket.id
 
@@ -811,44 +832,64 @@ resource "aws_lambda_permission" "allow_s3" {
   statement_id  = "AllowS3Invoke"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.polly_invoker.function_name
-  principal     = "s3.amazonaws.com"
+  principal     = "s3.${data.aws_partition.current.dns_suffix}"
   source_arn    = aws_s3_bucket.document_bucket.arn
 }
 
 # Upload and Track execution Lambdas
 resource "aws_lambda_function" "upload_execution" {
-  filename         = "${path.module}/../Lambda_Functions/upload-execution.ZIP"
+  filename         = "${path.module}/../lambda_functions/upload_execution.zip"
   function_name    = "${var.upload_lambda_name}-${random_string.suffix.result}"
   role             = aws_iam_role.lambda_upload_execution_role.arn
   handler          = "lambda_function.lambda_handler"
   runtime          = "python3.13"
   timeout          = 120
-  source_code_hash = filebase64sha256("${path.module}/../Lambda_Functions/upload-execution.ZIP")
+  source_code_hash = filebase64sha256(data.archive_file.upload_execution_lambda_package.output_path)
+  tracing_config {
+    mode = "Active"
+  }
   environment {
     variables = {
-      RANDOM_SUFFIX = random_string.suffix.result
+      DYNAMODB_TABLE = aws_dynamodb_table.document_request_db.name
+      S3_BUCKET      = aws_s3_bucket.document_bucket.bucket
     }
   }
 }
 
 resource "aws_lambda_function" "track_execution" {
-  filename         = "${path.module}/../Lambda_Functions/track-execution.ZIP"
+  filename         = "${path.module}/../lambda_functions/track_execution.zip"
   function_name    = "${var.track_lambda_name}-${random_string.suffix.result}"
   role             = aws_iam_role.lambda_track_execution_role.arn
   handler          = "lambda_function.lambda_handler"
   runtime          = "python3.13"
   timeout          = 120
-  source_code_hash = filebase64sha256("${path.module}/../Lambda_Functions/track-execution.ZIP")
+  source_code_hash = filebase64sha256(data.archive_file.track_execution_lambda_package.output_path)
+  tracing_config {
+    mode = "Active"
+  }
   environment {
     variables = {
-      RANDOM_SUFFIX = random_string.suffix.result
+      DYNAMODB_TABLE = aws_dynamodb_table.document_request_db.name
+      S3_BUCKET      = aws_s3_bucket.document_bucket.bucket
     }
   }
 }
 
 # Website S3 bucket
+#tfsec:ignore:aws-s3-encryption-customer-key #tfsec:ignore:aws-s3-enable-bucket-logging #tfsec:ignore:aws-s3-enable-versioning
 resource "aws_s3_bucket" "website_bucket" {
-  bucket = "${var.bucket_name}-${random_string.suffix.result}"
+  bucket        = "${var.bucket_name}-${random_string.suffix.result}"
+  force_destroy = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "website_bucket" {
+  bucket = aws_s3_bucket.website_bucket.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
 }
 
 # Bucket private access
@@ -884,9 +925,10 @@ resource "aws_cloudfront_origin_access_control" "oac" {
 }
 
 # CloudFront distribution
+#tfsec:ignore:aws-cloudfront-enable-waf #tfsec:ignore:aws-cloudfront-use-secure-tls-policy #tfsec:ignore:aws-cloudfront-enable-logging
 resource "aws_cloudfront_distribution" "s3_distribution" {
   enabled             = true
-  is_ipv6_enabled    = true
+  is_ipv6_enabled     = true
   default_root_object = "index.html"
 
   origin {
@@ -899,8 +941,8 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
     allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods         = ["GET", "HEAD"]
     target_origin_id       = "S3-${var.bucket_name}"
-    viewer_protocol_policy = "allow-all"
-    compress              = true
+    viewer_protocol_policy = "https-only"
+    compress               = true
 
 
     cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6" # CachingOptimized policy ID
@@ -909,8 +951,6 @@ resource "aws_cloudfront_distribution" "s3_distribution" {
     default_ttl = 3600
     max_ttl     = 86400
   }
-
-
 
   restrictions {
     geo_restriction {
@@ -931,10 +971,10 @@ resource "aws_s3_bucket_policy" "website_bucket_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "AllowCloudFrontServicePrincipal"
-        Effect    = "Allow"
+        Sid    = "AllowCloudFrontServicePrincipal"
+        Effect = "Allow"
         Principal = {
-          Service = "cloudfront.amazonaws.com"
+          Service = "cloudfront.${data.aws_partition.current.dns_suffix}"
         }
         Action   = "s3:GetObject"
         Resource = "${aws_s3_bucket.website_bucket.arn}/*"
@@ -994,7 +1034,7 @@ resource "aws_cognito_user_pool" "user_pool" {
       max_length = 256
     }
 
-  
+
   }
 
   verification_message_template {
@@ -1012,8 +1052,8 @@ resource "aws_cognito_user_pool_domain" "main" {
 
 # UI customization
 resource "aws_cognito_user_pool_ui_customization" "main" {
-  client_id = aws_cognito_user_pool_client.client.id
-  css       = <<EOF
+  client_id    = aws_cognito_user_pool_client.client.id
+  css          = <<EOF
     .background-customizable {
       background-color: #000000;
       background-size: cover;
@@ -1074,7 +1114,7 @@ resource "aws_cognito_user_pool_ui_customization" "main" {
       background-color: #4a4a4a;
     }
   EOF
-  image_file = filebase64("${path.module}/../Static Website/VocalDocs.jpg")
+  image_file   = filebase64("${path.module}/../static_website/VocalDocs.jpg")
   user_pool_id = aws_cognito_user_pool.user_pool.id
 
   depends_on = [aws_cognito_user_pool_domain.main]
@@ -1087,11 +1127,11 @@ resource "aws_cognito_user_pool_client" "client" {
   user_pool_id = aws_cognito_user_pool.user_pool.id
 
   generate_secret = false
-  
+
   allowed_oauth_flows                  = ["code"]
   allowed_oauth_flows_user_pool_client = true
   allowed_oauth_scopes                 = ["email", "openid", "phone"]
-  
+
   callback_urls = ["https://${aws_cloudfront_distribution.s3_distribution.domain_name}"]
   logout_urls   = ["https://${aws_cloudfront_distribution.s3_distribution.domain_name}"]
 
@@ -1113,7 +1153,7 @@ resource "aws_cognito_identity_pool" "main" {
   identity_pool_name = "${var.identity_pool_name}-${random_string.suffix.result}"
 
   allow_unauthenticated_identities = false
-  
+
   cognito_identity_providers {
     client_id               = aws_cognito_user_pool_client.client.id
     provider_name           = aws_cognito_user_pool.user_pool.endpoint
@@ -1131,15 +1171,15 @@ resource "aws_iam_role" "authenticated" {
       {
         Effect = "Allow"
         Principal = {
-          Federated = "cognito-identity.amazonaws.com"
+          Federated = "cognito-identity.${data.aws_partition.current.dns_suffix}"
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
           StringEquals = {
-            "cognito-identity.amazonaws.com:aud" = aws_cognito_identity_pool.main.id
+            "cognito-identity.${data.aws_partition.current.dns_suffix}:aud" = aws_cognito_identity_pool.main.id
           }
           "ForAnyValue:StringLike" = {
-            "cognito-identity.amazonaws.com:amr" = "authenticated"
+            "cognito-identity.${data.aws_partition.current.dns_suffix}:amr" = "authenticated"
           }
         }
       }
@@ -1156,9 +1196,9 @@ resource "aws_iam_role_policy" "authenticated_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "CognitoPolicy"
-        Effect = "Allow"
-        Action = "cognito-idp:AdminConfirmSignUp"
+        Sid      = "CognitoPolicy"
+        Effect   = "Allow"
+        Action   = "cognito-idp:AdminConfirmSignUp"
         Resource = aws_cognito_user_pool.user_pool.arn
       },
       {
@@ -1184,12 +1224,13 @@ resource "aws_cognito_identity_pool_roles_attachment" "main" {
 
 # Generate config.js with dynamic values
 resource "local_file" "web_config" {
-  filename = "${path.module}/../Static Website/config.js"
-  content = <<-EOT
+  filename = "${path.module}/../static_website/config.js"
+  content  = <<-EOT
     const config = {
+        PARTITION_DNS_SUFFIX: "${data.aws_partition.current.dns_suffix}",
         REGION: "${var.aws_region}",
         USER_POOL_ID: "${aws_cognito_user_pool.user_pool.id}",
-        COGNITO_USER_POOL_DOMAIN: "https://${aws_cognito_user_pool_domain.main.domain}.auth.${var.aws_region}.amazoncognito.com",  
+        COGNITO_USER_POOL_DOMAIN: "https://${aws_cognito_user_pool_domain.main.domain}.auth.${var.aws_region}.amazoncognito.com",
         USER_POOL_CLIENT_ID: "${aws_cognito_user_pool_client.client.id}",
         IDENTITY_POOL_ID: "${aws_cognito_identity_pool.main.id}",
         CLOUDFRONT_DOMAIN: "${aws_cloudfront_distribution.s3_distribution.domain_name}",
@@ -1219,7 +1260,7 @@ resource "aws_s3_object" "static_files" {
 
   bucket = aws_s3_bucket.website_bucket.id
   key    = each.value
-  source = "${path.module}/../Static Website/${each.value}"
+  source = "${path.module}/../static_website/${each.value}"
   content_type = lookup({
     "html" = "text/html",
     "css"  = "text/css",
@@ -1229,21 +1270,16 @@ resource "aws_s3_object" "static_files" {
     "ico"  = "image/x-icon"
   }, split(".", each.value)[length(split(".", each.value)) - 1], "text/plain")
 
-  etag = filemd5("${path.module}/../Static Website/${each.value}")
+  etag = filemd5("${path.module}/../static_website/${each.value}")
 }
 
 # Upload config.js separately after it's created
 resource "aws_s3_object" "config_js" {
-  bucket = aws_s3_bucket.website_bucket.id
-  key    = "config.js"
-  content = local_file.web_config.content  # Use content directly instead of file
+  bucket       = aws_s3_bucket.website_bucket.id
+  key          = "config.js"
+  content      = local_file.web_config.content # Use content directly instead of file
   content_type = "application/javascript"
-  etag = md5(local_file.web_config.content)  # Calculate MD5 from content
+  etag         = md5(local_file.web_config.content) # Calculate MD5 from content
 
   depends_on = [local_file.web_config]
 }
-
-
-
-
-

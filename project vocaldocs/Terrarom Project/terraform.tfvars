@@ -1,8 +1,0 @@
-aws_region             = "eu-west-1"
-bucket_name            = "vocaldocs-static-website-bucket"
-user_pool_name         = "vocaldocs-user-pool"
-user_pool_client_name  = "vocaldocs-user-pool-client"
-cognito_domain_prefix  = "vocaldocs-auth"
-document_bucket_name   = "document-request-bucket-vocaldocs"
-sns_topic_name         = "VocalDocs-SNS-Topic"
-dynamodb_table_name    = "Document_Request_db"

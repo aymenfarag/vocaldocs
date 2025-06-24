@@ -1,0 +1,5 @@
+bandit==1.8.3
+boto3==1.38.18
+pdf2image==1.17.0
+pillow==11.2.1
+semgrep==1.122.0
