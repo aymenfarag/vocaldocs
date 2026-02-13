@@ -33,8 +33,8 @@ Before deploying this solution, ensure you have:
 ### Clone the Repository
 
 ```bash
-git clone git@ssh.gitlab.aws.dev:aws-migration-sa-emea/vocaldocs-repo-gitlab.git
-cd vocaldocs-repo-gitlab
+git clone git@github.com:aymenfarag/vocaldocs.git
+cd vocaldocs
 ```
 
 ### Deploy the Infrastructure
@@ -156,3 +156,4 @@ For any other purposes, contact [Aymen Farag](aymenaly@amazon.ae) and [Walid She
 ## License
 
 This project is licensed under the terms of the MIT license.
+
