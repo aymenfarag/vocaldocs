@@ -54,11 +54,11 @@ def get_model_endpoint() -> str:
     """
     region = os.environ["AWS_REGION"]
     if region.startswith("eu-"):
-        return "eu.anthropic.claude-3-5-sonnet-20240620-v1:0"
+        return "eu.anthropic.claude-sonnet-4-5-20250929-v1:0"
     elif region.startswith("us-"):
-        return "us.anthropic.claude-3-5-sonnet-20240620-v1:0"
+        return "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
     elif region.startswith("ap-"):
-        return "apac.anthropic.claude-3-5-sonnet-20240620-v1:0"
+        return "apac.anthropic.claude-sonnet-4-5-20250929-v1:0"
     else:
         raise ValueError(f"Unsupported region: {region}")
 
@@ -117,8 +117,6 @@ def process_image_claude(image_base64: str) -> str:
                     "anthropic_version": "bedrock-2023-05-31",
                     "max_tokens": 1000,
                     "temperature": 0.0,
-                    "top_p": 1.0,
-                    "top_k": 0,
                     "messages": [
                         {
                             "role": "user",

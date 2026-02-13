@@ -994,6 +994,7 @@ resource "aws_cognito_user_pool" "user_pool" {
 
   username_attributes      = ["email"]
   auto_verified_attributes = ["email"]
+  user_pool_tier = "LITE"
 
   username_configuration {
     case_sensitive = false
@@ -1007,11 +1008,7 @@ resource "aws_cognito_user_pool" "user_pool" {
     require_uppercase                = true
     temporary_password_validity_days = 7
   }
-
-  user_pool_add_ons {
-    advanced_security_mode = "ENFORCED"
-  }
-
+  
   account_recovery_setting {
     recovery_mechanism {
       name     = "verified_email"
