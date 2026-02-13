@@ -25,7 +25,7 @@ Before deploying this solution, ensure you have:
 1. [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) installed and configured with appropriate credentials
 1. [Terraform](https://developer.hashicorp.com/terraform/install) installed (version 1.12 or later)
 1. [Git](https://git-scm.com/) installed on your local machine
-1. Amazon Bedrock LLM (Claude 3.5 Sonnet v1.0) enabled in your target AWS region ([check for region availability](https://docs.aws.amazon.com/bedrock/latest/userguide/models-regions.html))
+1. Amazon Bedrock LLM (Claude 4.5 Sonnet) enabled in your target AWS region ([check for region availability](https://docs.aws.amazon.com/bedrock/latest/userguide/models-regions.html))
 1. Amazon Polly service with required languages [available in your target region](https://docs.aws.amazon.com/general/latest/gr/pol.html)
 
 ## Getting Started
@@ -97,7 +97,7 @@ Return to the application tab and log in with your newly created user.
 5. A second Lambda function (Images-to-Text) is triggered by the SNS message.
 6. Images-to-Text:
    - Processes images sequentially
-   - Sends each image to Amazon Bedrock (Claude Sonnet 3.5 v1) for text extraction
+   - Sends each image to Amazon Bedrock (Claude Sonnet 4.5) for text extraction
    - Concatenates extracted text from all pages
    - Writes the formatted text file back to S3
 7. S3 event notification triggers the third Lambda function (Text-to-Voice) when a new .txt file is created.
